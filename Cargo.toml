@@ -5,6 +5,7 @@ authors = [
     "Andrew Hobden <andrew@hoverbear.org>",
     "Dan Burkert <dan@danburkert.com>",
     "James McGlashan <github@darkfox.id.au>",
+    "Guanghua Guo <1536310027@qq.com>",
 ]
 description = """
 Today our systems operate in extreme conditions, functioning across containers,
