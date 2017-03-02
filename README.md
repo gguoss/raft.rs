@@ -78,9 +78,9 @@ There are currently examples showing:
 For a multi-node example (`hashmap` shown for variety), make sure to include all the peers on all instances:
 ```bash
 # Node 1
-RUST_LOG=raft=debug cargo run --example hashmap server 1 1 127.0.0.1:8080 2 127.0.0.1:8081
+RUST_LOG=raft=debug cargo run --example hashmap server 1 127.0.0.1:8080 127.0.0.1:8081
 # Node 2
-RUST_LOG=raft=debug cargo run --example hashmap server 2 1 127.0.0.1:8080 2 127.0.0.1:8081
+RUST_LOG=raft=debug cargo run --example hashmap server 2 127.0.0.1:8080 127.0.0.1:8081
 ```
 
 We'd love it if you contributed your own or expanded on ours!
