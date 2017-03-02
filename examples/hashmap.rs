@@ -72,7 +72,7 @@ Usage:
   hashmap get <key> (<node-address>)...
   hashmap put <key> <new-value> (<node-address>)...
   hashmap cas <key> <expected-value> <new-value> (<node-address>)...
-  hashmap server <id> [<node-id> <node-address>]...
+  hashmap server <id> (<node-address>)...
   hashmap (-h | --help)
 
 Options:
@@ -148,18 +148,25 @@ fn server(args: &Args) {
 
     // As well as a unique server id.
     let id = ServerId::from(args.arg_id.unwrap());
-
+    println!("id:{:?}", id);
+    println!("node_id:{:?}, node_address:{:?}", args.arg_node_id, args.arg_node_address);
+    let mut node_id: Vec<u64> = vec![];
+    for i in 0..args.arg_node_address.len() {
+        node_id.push(i as u64 + 1);
+    }
     // ...  And a list of peers.
-    let mut peers = args.arg_node_id
+    let mut peers = node_id
                     .iter()
                     .zip(args.arg_node_address.iter())
                     .map(|(&id, addr)| (ServerId::from(id), parse_addr(&addr)))
                     .collect::<HashMap<_,_>>();
+    println!("peers:{:?}", peers);
 
     // The Raft Server will return an error if its ID is inside of its peer set. Don't do that.
     // Instead, take it out and use it!
     let addr = peers.remove(&id).unwrap();
 
+    println!("addr:{:?}", addr);
     // Using all of the above components.
     // You probably shouldn't `.unwrap()` in production code unless you're totally sure it works
     // 100% of the time, all the time.
