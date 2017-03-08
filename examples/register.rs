@@ -5,11 +5,8 @@
 extern crate bincode;
 extern crate docopt;
 extern crate env_logger;
-extern crate raft;
+extern crate libraft;
 extern crate rustc_serialize;
-//extern crate serde;
-//#[macro_use]
-//extern crate serde_derive;
 
 use std::collections::HashMap;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -19,7 +16,7 @@ use bincode::rustc_serialize::{encode, decode};
 
 use docopt::Docopt;
 
-use raft::{
+use libraft::{
     state_machine,
     persistent_log,
     ServerId,

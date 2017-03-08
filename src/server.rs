@@ -9,10 +9,11 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::thread::{self, JoinHandle};
 use std::rc::Rc;
+use std::sync::mpsc;
 
 use mio::tcp::TcpListener;
 use mio::util::Slab;
-use mio::{EventLoop, EventSet, Handler, PollOpt, Token};
+use mio::{EventLoop, EventSet, Handler, PollOpt, Token, Sender};
 use mio::Timeout as TimeoutHandle;
 use capnp::message::{Builder, HeapAllocator};
 
@@ -27,11 +28,15 @@ use consensus::{Consensus, Actions, ConsensusTimeout};
 use state_machine::StateMachine;
 use persistent_log::Log;
 use connection::{Connection, ConnectionKind};
+use redis;
+use libproto;
+use libproto::*;
+use protobuf::core::Message;
+use cmd;
 
 const LISTENER: Token = Token(0);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-
 pub enum ServerTimeout {
     Consensus(ConsensusTimeout),
     Reconnect(Token),
@@ -57,7 +62,7 @@ pub struct Server<L, M>
     id: ServerId,
 
     /// Raft state machine consensus.
-    consensus: Consensus<L, M>,
+    pub consensus: Consensus<L, M>,
 
     /// Connection listener.
     listener: TcpListener,
@@ -76,6 +81,8 @@ pub struct Server<L, M>
 
     /// Currently registered reconnection timeouts.
     reconnection_timeouts: HashMap<Token, TimeoutHandle>,
+
+    con: Option<redis::Connection>,
 }
 
 /// The implementation of the Server.
@@ -85,7 +92,7 @@ impl<L, M> Server<L, M>
 {
     /// Creates a new instance of the server.
     /// *Gotcha:* `peers` must not contain the local `id`.
-    fn new(id: ServerId,
+    pub fn new(id: ServerId,
            addr: SocketAddr,
            peers: HashMap<ServerId, SocketAddr>,
            store: L,
@@ -109,6 +116,7 @@ impl<L, M> Server<L, M>
             client_tokens: HashMap::new(),
             consensus_timeouts: HashMap::new(),
             reconnection_timeouts: HashMap::new(),
+            con: None,
         };
 
         for (peer_id, peer_addr) in peers {
@@ -128,6 +136,10 @@ impl<L, M> Server<L, M>
         Ok((server, event_loop))
     }
 
+    pub fn set_con(&mut self, con: redis::Connection) {
+        self.con = Some(con);
+    }
+
     /// Runs a new Raft server in the current thread.
     ///
     /// # Arguments
@@ -144,6 +156,20 @@ impl<L, M> Server<L, M>
                state_machine: M)
                -> Result<()> {
         let (mut server, mut event_loop) = try!(Server::new(id, addr, peers, store, state_machine));
+        let actions = server.consensus.init();
+        server.execute_actions(&mut event_loop, actions);
+        event_loop.run(&mut server).map_err(From::from)
+    }
+
+    pub fn run_and_get_channel(id: ServerId,
+               addr: SocketAddr,
+               peers: HashMap<ServerId, SocketAddr>,
+               store: L,
+               state_machine: M,
+               tx: mpsc::Sender<Sender<NotifyMessage>>)
+               -> Result<()> {
+        let (mut server, mut event_loop) = try!(Server::new(id, addr, peers, store, state_machine));
+        tx.send(event_loop.channel()).unwrap();
         let actions = server.consensus.init();
         server.execute_actions(&mut event_loop, actions);
         event_loop.run(&mut server).map_err(From::from)
@@ -190,13 +216,15 @@ impl<L, M> Server<L, M>
         }
     }
 
-    fn execute_actions(&mut self, event_loop: &mut EventLoop<Server<L, M>>, actions: Actions) {
+    pub fn execute_actions(&mut self, event_loop: &mut EventLoop<Server<L, M>>, actions: Actions) {
         scoped_trace!("executing actions: {:?}", actions);
         let Actions { peer_messages,
                       client_messages,
                       timeouts,
                       clear_timeouts,
-                      clear_peer_messages } = actions;
+                      clear_peer_messages,
+                      is_new_blk,
+                    } = actions;
 
         if clear_peer_messages {
             for &token in self.peer_tokens.values() {
@@ -235,6 +263,20 @@ impl<L, M> Server<L, M>
                                    "unable to clear timeout: {:?}",
                                    timeout)
                 });
+        }
+        if is_new_blk {
+            // TO DO: Notify pool.
+            println!("3s timer, leader to spawn new blk.");
+            let mut msg = communication::Message::new();
+            msg.set_cmd_id(libproto::cmd_id(submodules::CONSENSUS_CMD, topics::NEW_BLK));
+            msg.set_field_type(communication::MsgType::MSG);
+            msg.set_content(cmd::encode(&cmd::Command::SPAWN_BLK));
+            if let Some(ref conn) = self.con {
+                let _: () = redis::cmd("PUBLISH").arg(submodules::CONSENSUS_CMD).arg(msg.write_to_bytes().unwrap()).query(conn).unwrap();
+            }
+            else {
+                panic!("connect tx_pool failed.");
+            }
         }
     }
 
@@ -390,11 +432,17 @@ impl<L, M> Server<L, M>
     }
 }
 
+#[derive(Clone)]
+pub enum NotifyMessage {
+}
+
+unsafe impl Sync for NotifyMessage {}
+
 impl<L, M> Handler for Server<L, M>
     where L: Log,
           M: StateMachine
 {
-    type Message = ();
+    type Message = NotifyMessage;
     type Timeout = ServerTimeout;
 
     fn ready(&mut self, event_loop: &mut EventLoop<Server<L, M>>, token: Token, events: EventSet) {

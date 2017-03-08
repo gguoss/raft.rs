@@ -13,7 +13,7 @@
 #![feature(plugin)]
 #![feature(custom_derive)]
 
-extern crate raft; // <--- Kind of a big deal for this!
+extern crate libraft; // <--- Kind of a big deal for this!
 extern crate env_logger;
 #[macro_use] extern crate log;
 #[macro_use] extern crate scoped_log;
@@ -31,7 +31,7 @@ use serde_json::Value;
 use docopt::Docopt;
 
 // Raft's major components. See comments in code on usage and things.
-use raft::{
+use libraft::{
     Server,
     Client,
     state_machine,

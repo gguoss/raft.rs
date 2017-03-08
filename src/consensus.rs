@@ -31,6 +31,7 @@ use persistent_log::Log;
 const ELECTION_MIN: u64 = 1500;
 const ELECTION_MAX: u64 = 3000;
 const HEARTBEAT_DURATION: u64 = 1000;
+const BLK_TIME: u64 = 3000;
 
 /// Consensus timeout types.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -39,6 +40,7 @@ pub enum ConsensusTimeout {
     Election,
     // A heartbeat timeout. Stable value.
     Heartbeat(ServerId),
+    SpawnBlk(ConsensusState),
 }
 
 impl ConsensusTimeout {
@@ -49,6 +51,7 @@ impl ConsensusTimeout {
                 rand::thread_rng().gen_range::<u64>(ELECTION_MIN, ELECTION_MAX)
             }
             ConsensusTimeout::Heartbeat(..) => HEARTBEAT_DURATION,
+            ConsensusTimeout::SpawnBlk(..) => BLK_TIME,
         }
     }
 }
@@ -66,6 +69,7 @@ pub struct Actions {
     pub timeouts: Vec<ConsensusTimeout>,
     /// Whether to clear outbound peer message queues.
     pub clear_peer_messages: bool,
+    pub is_new_blk: bool,
 }
 
 impl fmt::Debug for Actions {
@@ -98,6 +102,7 @@ impl Actions {
             clear_timeouts: false,
             timeouts: vec![],
             clear_peer_messages: false,
+            is_new_blk: false,
         }
     }
 }
@@ -218,6 +223,7 @@ impl<L, M> Consensus<L, M>
         match timeout {
             ConsensusTimeout::Election => self.election_timeout(actions),
             ConsensusTimeout::Heartbeat(peer) => self.heartbeat_timeout(peer, actions),
+            ConsensusTimeout::SpawnBlk(state) => self.spawn_blk_timeout(state, actions),
         }
     }
 
@@ -679,6 +685,14 @@ impl<L, M> Consensus<L, M>
         actions.peer_messages.push((peer, Rc::new(message)));
     }
 
+    fn spawn_blk_timeout(&self, state: ConsensusState, actions: &mut Actions) {
+        if self.is_leader() {
+            actions.is_new_blk = true;
+            let timeout = ConsensusTimeout::SpawnBlk(ConsensusState::Leader);
+            actions.timeouts.push(timeout);
+        }
+    }
+
     /// Triggers an election timeout.
     fn election_timeout(&mut self, actions: &mut Actions) {
         scoped_assert!(!self.is_leader());
@@ -718,6 +732,8 @@ impl<L, M> Consensus<L, M>
 
         actions.clear_timeouts = true;
         actions.clear_peer_messages = true;
+        let timeout = ConsensusTimeout::SpawnBlk(ConsensusState::Leader);
+        actions.timeouts.push(timeout);
     }
 
     /// Transitions the consensus state machine to Candidate state.

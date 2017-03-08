@@ -1,11 +1,11 @@
 [package]
-name = "raft"
+name = "libraft"
 version = "0.0.1"
 authors = [
+    "gguoss <1536310027@qq.com>",
     "Andrew Hobden <andrew@hoverbear.org>",
     "Dan Burkert <dan@danburkert.com>",
     "James McGlashan <github@darkfox.id.au>",
-    "Guanghua Guo <1536310027@qq.com>",
 ]
 description = """
 Today our systems operate in extreme conditions, functioning across containers,
@@ -54,6 +54,12 @@ rand = "0.3"
 scoped_log = "0.1"
 uuid = "0.1"
 wrapped_enum = "0.1"
+redis = "0.8"
+libproto = {path = "../../../share_libs/proto"}
+protobuf = { version = "^1.0.0"}
+bincode = "1.0.0-alpha5"
+serde_derive = "0.9"
+serde = "0.9"
 
 [dev-dependencies]
 env_logger = "*"
@@ -63,4 +69,3 @@ serde = "0.9"
 serde_json = "0.9"
 serde_derive = "0.9"
 rustc-serialize = "*"
-bincode = "*"

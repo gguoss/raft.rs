@@ -1,4 +1,4 @@
-#![crate_name = "raft"]
+#![crate_name = "libraft"]
 #![crate_type="lib"]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/Hoverbear/raft/master/raft.png")]
 #![doc(html_root_url = "https://hoverbear.github.io/raft/raft/")]
@@ -79,8 +79,15 @@ extern crate capnp_nonblock;
 extern crate mio;
 extern crate rand;
 extern crate uuid;
+extern crate redis;
+extern crate libproto;
+extern crate protobuf;
+extern crate serde;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate serde_derive;
+extern crate bincode;
 #[macro_use]
 extern crate scoped_log;
 #[macro_use]
@@ -116,11 +123,13 @@ mod messages;
 mod consensus;
 mod server;
 mod state;
+mod cmd;
 
 pub use server::Server;
 pub use state_machine::StateMachine;
 pub use persistent_log::Log;
 pub use client::Client;
+pub use server::NotifyMessage;
 
 use std::{io, net, ops, fmt};
 
@@ -232,7 +241,7 @@ impl From<u64> for LogIndex {
     }
 }
 impl Into<u64> for LogIndex {
-    fn into(self) -> u64 {
+   fn into(self) -> u64 {
         self.0
     }
 }
